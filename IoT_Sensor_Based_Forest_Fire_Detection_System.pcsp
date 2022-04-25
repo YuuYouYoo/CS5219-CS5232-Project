@@ -1,0 +1,33 @@
+﻿//@@IoT_Sensor_Based_Forest_Fire_Detection_System@@
+
+
+#define SENSOR_NODE_CLUSTER_NUMBER 9;
+
+enum {INITIALIZED, RUNNING, FAILED};
+
+var sensor_node_clusters_state[SENSOR_NODE_CLUSTER_NUMBER] = [INITIALIZED(SENSOR_NODE_CLUSTER_NUMBER)];
+hvar sensor_node_clusters_failure_rate[SENSOR_NODE_CLUSTER_NUMBER]: {0..100} = [32, 36, 20, 22, 15, 37, 12, 4, 54];
+
+
+Sensor_Node_Cluster(i) = pcase {
+	(100 - sensor_node_clusters_failure_rate[i]): running_sensor_node_cluster.i{sensor_node_clusters_state[i] = RUNNING;} -> Skip
+	sensor_node_clusters_failure_rate[i]: failed_sensor_node_cluster.i{sensor_node_clusters_state[i] = FAILED;} -> Skip
+};
+
+IoT_Sensor_Based_Forest_Fire_Detection_System() = ||| i: {0..(SENSOR_NODE_CLUSTER_NUMBER - 1)} @ Sensor_Node_Cluster(i);
+
+
+#define unsafe_state (
+	(sensor_node_clusters_state[0] == FAILED && (sensor_node_clusters_state[1] == FAILED || sensor_node_clusters_state[3] == FAILED)) || 
+	(sensor_node_clusters_state[1] == FAILED && (sensor_node_clusters_state[0] == FAILED || sensor_node_clusters_state[2] == FAILED || sensor_node_clusters_state[4] == FAILED)) || 
+	(sensor_node_clusters_state[2] == FAILED && (sensor_node_clusters_state[1] == FAILED || sensor_node_clusters_state[5] == FAILED)) || 
+	(sensor_node_clusters_state[3] == FAILED && (sensor_node_clusters_state[0] == FAILED || sensor_node_clusters_state[4] == FAILED || sensor_node_clusters_state[6] == FAILED)) || 
+	(sensor_node_clusters_state[4] == FAILED && (sensor_node_clusters_state[1] == FAILED || sensor_node_clusters_state[3] == FAILED || sensor_node_clusters_state[5] == FAILED || sensor_node_clusters_state[7] == FAILED)) || 
+	(sensor_node_clusters_state[5] == FAILED && (sensor_node_clusters_state[2] == FAILED || sensor_node_clusters_state[4] == FAILED || sensor_node_clusters_state[8] == FAILED)) || 
+	(sensor_node_clusters_state[6] == FAILED && (sensor_node_clusters_state[3] == FAILED || sensor_node_clusters_state[7] == FAILED)) || 
+	(sensor_node_clusters_state[7] == FAILED && (sensor_node_clusters_state[6] == FAILED || sensor_node_clusters_state[4] == FAILED || sensor_node_clusters_state[8] == FAILED)) || 
+	(sensor_node_clusters_state[8] == FAILED && (sensor_node_clusters_state[5] == FAILED || sensor_node_clusters_state[7] == FAILED))
+);
+
+#assert IoT_Sensor_Based_Forest_Fire_Detection_System() reaches unsafe_state with prob;
+
