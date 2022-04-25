@@ -1,15 +1,12 @@
 ﻿//@@2PC_Protocol@@
 
-#define PARTICIPANT_NUMBER 2;
-//#define NETWORK_LATENCY 2;
-//#define COORDINATOR_TIMEOUT 3;
-//#define PARTICIPANT_TIMEOUT 3;
+#define PARTICIPANT_NUMBER 4;
 #define COORDINATOR_BOUNDED_ERROR_COUNT 1; //-1 means unbounded
 #define PARTICIPANT_BOUNDED_ERROR_COUNT 1; //-1 means unbounded
-#define COORDINATOR_BOUNDED_TIMEOUT_COUNT 1;
+#define COORDINATOR_BOUNDED_TIMEOUT_COUNT 2;
 
-enum {C_INITIAL, C_WAIT, C_ABORT, C_COMMIT, C_FAILED, 
-	  P_INITIAL, P_READY, P_ABORT, P_COMMIT, P_FAILED, 
+enum {C_INITIAL, C_WAIT, C_ABORT, C_COMMIT,
+	  P_INITIAL, P_READY, P_ABORT, P_COMMIT,
 	  C_MSG_PREPARE, C_MSG_GLOBAL_COMMIT, C_MSG_GLOBAL_ABORT, 
 	  P_MSG_VOTE_COMMIT, P_MSG_VOTE_ABORT, P_MSG_ACK, 
 	  P_MSG_DECISION_REQUEST, P_MSG_DECISION_UNCERTAIN, 
@@ -31,7 +28,8 @@ hvar participants_decision_request_responses[PARTICIPANT_NUMBER][PARTICIPANT_NUM
 hvar participants_decision_request_result = [P_MSG_DECISION_UNCERTAIN(PARTICIPANT_NUMBER)];
 
 
-Coordinator_Send_Prepare(timeout_count) = c_prepare{coordinator_state = C_WAIT;} -> 
+Coordinator_Send_Prepare(timeout_count) = 
+	c_prepare{coordinator_state = C_WAIT;} -> 
 	(||| i: {0..PARTICIPANT_NUMBER-1} @ ((
 		ifa (coordinator_sent_messages[i] == MSG_NULL) {
 			atomic{
@@ -92,7 +90,8 @@ Coordinator_Make_Global_Decision(timeout_count) =
 #alphabet Coordinator_Send_Global_Commit {
 	i: {0..(PARTICIPANT_NUMBER-1)} @ c_global_commit_already_sent_to.i
 };
-Coordinator_Send_Global_Commit(timeout_count) = c_global_commit{coordinator_state = C_COMMIT;} -> 
+Coordinator_Send_Global_Commit(timeout_count) = 
+	c_global_commit{coordinator_state = C_COMMIT;} -> 
 	(||| i: {0..PARTICIPANT_NUMBER-1} @ (
 		ifa (coordinator_sent_messages[i] == C_MSG_PREPARE) {
 			atomic{
@@ -111,7 +110,8 @@ Coordinator_Send_Global_Commit(timeout_count) = c_global_commit{coordinator_stat
 	i: {0..(PARTICIPANT_NUMBER-1)} @ c_global_abort_already_sent_to.i, 
 	i: {0..(PARTICIPANT_NUMBER-1)} @ c_global_abort_no_need_to_send_to.i
 };
-Coordinator_Send_Global_Abort(timeout_count) = c_global_abort{coordinator_state = C_ABORT;} -> 
+Coordinator_Send_Global_Abort(timeout_count) = 
+	c_global_abort{coordinator_state = C_ABORT;} -> 
 	(||| i: {0..PARTICIPANT_NUMBER-1} @ (
 		ifa (coordinator_sent_messages[i] == C_MSG_PREPARE && coordinator_received_messages[i] != P_MSG_VOTE_ABORT) {
 			atomic{
@@ -154,14 +154,13 @@ Coordinator_Recover(timeout_count) =
 		Coordinator_Send_Prepare(timeout_count)
 	};
 
-// clear the channel, if not received anything from a participant, then its channel might contain prepare, vote_abort, vote_commit, clear them and send the global_abort to all except those vote abort
-Coordinator_Terminate(timeout_count) = tau{coordinator_timeout = true;} -> 
+Coordinator_Terminate(timeout_count) = 
+	tau{coordinator_timeout = true;} -> 
 	ifa (coordinator_state == C_COMMIT) {
 		Coordinator_Send_Global_Commit(timeout_count)
 	} else if (coordinator_state == C_ABORT) {
 		Coordinator_Send_Global_Abort(timeout_count)
 	} else {
-//		atomic {
 		c_global_abort{coordinator_state = C_ABORT;} -> 
 		(||| i: {0..PARTICIPANT_NUMBER-1} @ (
 			atomic {
@@ -170,8 +169,7 @@ Coordinator_Terminate(timeout_count) = tau{coordinator_timeout = true;} ->
 					case {
 						message == P_MSG_VOTE_ABORT: tau{coordinator_received_messages[i] = P_MSG_VOTE_ABORT} -> Skip
 						message == P_MSG_VOTE_COMMIT: tau{coordinator_received_messages[i] = P_MSG_VOTE_COMMIT} -> Skip
-						// default include the case where message == C_MSG_PREPARE
-						default: Skip
+						default: Skip //default covers the case where message == C_MSG_PREPARE
 					}
 				};
 				network[i]!C_MSG_GLOBAL_ABORT -> 
@@ -181,16 +179,18 @@ Coordinator_Terminate(timeout_count) = tau{coordinator_timeout = true;} ->
 				Skip
 			}
 		))
-//		}
 	};
 
-Coordinator_Error(error_count) = [error_count != 0](exception -> Coordinator_Error(error_count - 1)) [] [error_count == 0]Skip;
+Coordinator_Error(error_count) = 
+	[error_count != 0](exception -> Coordinator_Error(error_count - 1)) [] [error_count == 0]Skip;
 
-Coordinator_Error_Handling(timeout_count) = Coordinator_Recover(timeout_count) interrupt exception -> Coordinator_Error_Handling(timeout_count);
+Coordinator_Error_Handling(timeout_count) = 
+	Coordinator_Recover(timeout_count) interrupt exception -> Coordinator_Error_Handling(timeout_count);
 
-// every failure will reset the timeout_count back to its initial value
 Coordinator() = 
-	Coordinator_Error(COORDINATOR_BOUNDED_ERROR_COUNT) || (Coordinator_Send_Prepare(COORDINATOR_BOUNDED_TIMEOUT_COUNT) interrupt exception -> Coordinator_Error_Handling(COORDINATOR_BOUNDED_TIMEOUT_COUNT));
+	Coordinator_Error(COORDINATOR_BOUNDED_ERROR_COUNT) || 
+		(Coordinator_Send_Prepare(COORDINATOR_BOUNDED_TIMEOUT_COUNT)
+			interrupt exception -> Coordinator_Error_Handling(COORDINATOR_BOUNDED_TIMEOUT_COUNT));
 
 
 Participant_Receive_Prepare(i) = 
@@ -283,7 +283,7 @@ Participant_Recover(i) =
 	} else {
 		Skip
 	};
-	
+
 Participant_Terminate(i) = 
 	ifa (participants_state[i] == P_INITIAL) {
 		p_unilaterally_abort_by.i{participants_state[i] = P_ABORT;} -> Skip
@@ -308,7 +308,7 @@ Participant_Cooperative_Terminate(i) =
 	case {
 		participants_decision_request_result[i] == P_MSG_DECISION_ABORT: p_cooperatively_abort_by.i{participants_state[i] = P_ABORT} -> Skip
 		participants_decision_request_result[i] == P_MSG_DECISION_COMMIT: p_cooperatively_abort_by.i{participants_state[i] = P_COMMIT} -> Skip
-		default: [participants_state[i] == P_COMMIT]Skip
+		default: [participants_state[i] == P_COMMIT || participants_state[i] == P_ABORT]Skip
 	};
 
 Participant_Cooperative_Terminate_Thread(i, j) = 
@@ -341,11 +341,11 @@ Participant_Error(i, error_count) = [error_count != 0](exception.i -> Participan
 Participant_Error_Handling(i) = Participant_Recover(i) interrupt exception.i -> Participant_Error_Handling(i);
 
 Participant(i) = 
-	Participant_Error(i, PARTICIPANT_BOUNDED_ERROR_COUNT) || Participant_Receive_Prepare(i) interrupt exception.i -> Participant_Error_Handling(i);
+	Participant_Error(i, PARTICIPANT_BOUNDED_ERROR_COUNT) || 
+		Participant_Receive_Prepare(i) interrupt exception.i -> Participant_Error_Handling(i);
 
 Participants() = ||| i: {0..PARTICIPANT_NUMBER-1} @ Participant(i);
 
-//half-duplex
 Participant_Daemon(i) = 
 	(||| j: {0..PARTICIPANT_NUMBER-1} @ Participant_Daemon_Thread(i, j)) |||
 	atomic{
@@ -373,32 +373,14 @@ Participant_Daemon(i) =
 	};
 
 Participant_Daemon_Thread(i, j) = 
-	(peer_network[j * PARTICIPANT_NUMBER + i]?C_MSG_DECISION_REQUEST -> 
+	peer_network[j * PARTICIPANT_NUMBER + i]?P_MSG_DECISION_REQUEST -> 
 	case {
 		participants_state[i] == P_INITIAL: peer_network[j * PARTICIPANT_NUMBER + i]!P_MSG_DECISION_ABORT -> Participant_Daemon_Thread(i, j)
 		participants_state[i] == P_READY: peer_network[j * PARTICIPANT_NUMBER + i]!P_MSG_DECISION_UNCERTAIN -> Participant_Daemon_Thread(i, j)
 		participants_state[i] == P_COMMIT: peer_network[j * PARTICIPANT_NUMBER + i]!P_MSG_DECISION_COMMIT -> Participant_Daemon_Thread(i, j)
 		participants_state[i] == P_ABORT: peer_network[j * PARTICIPANT_NUMBER + i]!P_MSG_DECISION_ABORT -> Participant_Daemon_Thread(i, j)
 		default: Participant_Daemon_Thread(i, j)
-	}
-	[]
-	atomic {
-		[participants_state[i] != P_FAILED]peer_network[j * PARTICIPANT_NUMBER + i]?C_MSG_DECISION_ABORT -> 
-		p_global_abort_received_from_by.j.i{
-			participants_state[i] = P_ABORT;
-		} -> 
-		Skip
 	};
-	Participant_Daemon_Thread(i, j)
-	[]
-	atomic {
-		[participants_state[i] != P_FAILED]peer_network[j * PARTICIPANT_NUMBER + i]?C_MSG_DECISION_COMMIT -> 
-		p_global_commit_received_from_by.j.i{
-			participants_state[i] = P_COMMIT;
-		} -> 
-		Skip
-	};
-	Participant_Daemon_Thread(i, j)) \ {p_global_abort_received_from_by.j.i, p_global_commit_received_from_by.j.i};
 
 Participants_Daemon() = ||| i: {0..PARTICIPANT_NUMBER-1} @ Participant_Daemon(i);
 
@@ -410,21 +392,141 @@ Distributed_System() = Coordinator() ||| Participants() ||| Participants_Daemon(
 
 #define coordinator_state_is_commit (coordinator_state == C_COMMIT);
 #define coordinator_state_is_abort (coordinator_state == C_ABORT);
-#define coordinator_state_is_failed (coordinator_state == C_FAILED);
-#define participants_states_are_commit (participants_state[0] == P_COMMIT && participants_state[1] == P_COMMIT && participants_state[2] == P_COMMIT);
-#define participant_0_state_is_abort_or_failed (participants_state[0] == P_ABORT || participants_state[0] == P_FAILED);
-#define participant_1_state_is_abort_or_failed (participants_state[1] == P_ABORT || participants_state[1] == P_FAILED);
-#define participant_2_state_is_abort_or_failed (participants_state[2] == P_ABORT || participants_state[2] == P_FAILED);
-#define participants_states_are_abort_or_failed (
-	participant_0_state_is_abort_or_failed && 
-	participant_1_state_is_abort_or_failed 
+
+#define participant_0_state_is_abort (participants_state[0] == P_ABORT);
+#define participant_1_state_is_abort (participants_state[1] == P_ABORT);
+#define participant_2_state_is_abort (participants_state[2] == P_ABORT);
+#define participant_3_state_is_abort (participants_state[3] == P_ABORT);
+
+#define participant_0_state_is_commit (participants_state[0] == P_COMMIT);
+#define participant_1_state_is_commit (participants_state[1] == P_COMMIT);
+#define participant_2_state_is_commit (participants_state[2] == P_COMMIT);
+#define participant_3_state_is_commit (participants_state[3] == P_COMMIT);
+
+#define two_participant_states_are_commit (
+	participant_0_state_is_commit && 
+	participant_1_state_is_commit
+);
+#define three_participant_states_are_commit (
+	participant_0_state_is_commit && 
+	participant_1_state_is_commit && 
+	participant_2_state_is_commit
+);
+#define four_participant_states_are_commit (
+	participant_0_state_is_commit && 
+	participant_1_state_is_commit && 
+	participant_2_state_is_commit && 
+	participant_3_state_is_commit
 );
 
-#assert Distributed_System() |= [] (coordinator_state_is_commit -> <> participants_states_are_commit));
-#assert Distributed_System() |= [] (coordinator_state_is_abort || coordinator_state_is_failed -> <> participants_states_are_abort_or_failed);
-#assert Distributed_System() |= [] (participant_0_state_is_abort_or_failed || participant_1_state_is_abort_or_failed -> <> (participants_states_are_abort_or_failed && (coordinator_state_is_abort || coordinator_state_is_failed)));
+#define two_participant_states_are_abort (
+	participant_0_state_is_abort && 
+	participant_1_state_is_abort
+);
+#define three_participant_states_are_abort (
+	participant_0_state_is_abort && 
+	participant_1_state_is_abort && 
+	participant_2_state_is_abort
+);
+#define four_participant_states_are_abort (
+	participant_0_state_is_abort && 
+	participant_1_state_is_abort && 
+	participant_2_state_is_abort && 
+	participant_3_state_is_abort
+);
+
+#assert Distributed_System() |= [] <> (
+	two_participant_states_are_commit || two_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_commit -> <> two_participant_states_are_commit
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_abort -> <> two_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	participant_0_state_is_abort || 
+	participant_1_state_is_abort 
+	-> <> two_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	p_vote_commit_sent_by.0 && 
+	p_vote_commit_sent_by.1 
+	-> <> coordinator_state_is_commit
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_commit
+	-> (
+		p_vote_commit_sent_by.0 &&
+		p_vote_commit_sent_by.1 
+	)
+);
+
+#assert Distributed_System() |= [] <> (
+	three_participant_states_are_commit || three_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_commit -> <> three_participant_states_are_commit
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_abort -> <> three_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	participant_0_state_is_abort || 
+	participant_1_state_is_abort || 
+	participant_2_state_is_abort 
+	-> <> three_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	p_vote_commit_sent_by.0 && 
+	p_vote_commit_sent_by.1 && 
+	p_vote_commit_sent_by.2
+	-> <> coordinator_state_is_commit
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_commit
+	-> (
+		p_vote_commit_sent_by.0 &&
+		p_vote_commit_sent_by.1 && 
+		p_vote_commit_sent_by.2
+	)
+);
+
+#assert Distributed_System() |= [] <> (
+	four_participant_states_are_commit || four_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_commit -> <> four_participant_states_are_commit
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_abort -> <> four_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	participant_0_state_is_abort || 
+	participant_1_state_is_abort || 
+	participant_2_state_is_abort || 
+	participant_3_state_is_abort 
+	-> <> four_participant_states_are_abort
+);
+#assert Distributed_System() |= [] (
+	p_vote_commit_sent_by.0 && 
+	p_vote_commit_sent_by.1 && 
+	p_vote_commit_sent_by.2 && 
+	p_vote_commit_sent_by.3
+	-> <> coordinator_state_is_commit
+);
+#assert Distributed_System() |= [] (
+	coordinator_state_is_commit
+	-> (
+		p_vote_commit_sent_by.0 &&
+		p_vote_commit_sent_by.1 && 
+		p_vote_commit_sent_by.2 && 
+		p_vote_commit_sent_by.3
+	)
+);
+
+
 //#assert Distributed_System() |= [] (coordinator_state_is_commit -> <> (&& i: {0..PARTICIPANT_NUMBER-1} @ (participants_state[i] == P_COMMIT)));
 //#assert Distributed_System() |= [] (coordinator_state == C_ABORT -> <> (&& i: {0..PARTICIPANT_NUMBER-1} @ (participants_state[i] == P_ABORT || participants_state[i] == P_FAILED)));
 //#assert Distributed_System() |= [] (coordinator_state == C_FAILED -> <> (&& i: {0..PARTICIPANT_NUMBER-1} @ (participants_state[i] == P_ABORT || participants_state[i] == P_FAILED)));
 //#assert Distributed_System() |= [] ((|| i: {0..PARTICIPANT_NUMBER-1} @ (participants_state[i] == P_ABORT || participants_state[i] == P_FAILED)) -> <> (coordinator_state == C_ABORT || coordinator_state == C_FAILED) && (&& i: {0..PARTICIPANT_NUMBER-1} @ (participants_state[i] == P_ABORT || participants_state[i] == P_FAILED)));
-
