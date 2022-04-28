@@ -1,9 +1,9 @@
-﻿//@@Distributed_Mutual_Exclusion_Protocol_With_3_Nodes@@
+﻿//@@Distributed_Mutual_Exclusion_Protocol_With_4_Nodes@@
 
 #import "PAT.Lib.QueueList";
 
-#define NODE_NUMBER 3;
-#define NODE_BOUNDED_CRITICAL_SECTION_ACCESS_COUNT 2;
+#define NODE_NUMBER 4;
+#define NODE_BOUNDED_CRITICAL_SECTION_ACCESS_COUNT 1;
 
 enum {
 	RUNNING, FAILED, COMPLETED,
@@ -14,10 +14,12 @@ enum {
 channel request_network_0 (NODE_NUMBER - 1);
 channel request_network_1 (NODE_NUMBER - 1);
 channel request_network_2 (NODE_NUMBER - 1);
+channel request_network_3 (NODE_NUMBER - 1);
 
 channel response_network_0 1;
 channel response_network_1 1;
 channel response_network_2 1;
+channel response_network_3 1;
 
 var nodes_state = [RUNNING(NODE_NUMBER)];
 var nodes_critical_section_access_count = [NODE_BOUNDED_CRITICAL_SECTION_ACCESS_COUNT(NODE_NUMBER)];
@@ -27,12 +29,15 @@ var nodes_send_privilege_to = [-1(NODE_NUMBER)];
 hvar<Queue> node_0_queue = new Queue();
 hvar<Queue> node_1_queue = new Queue();
 hvar<Queue> node_2_queue = new Queue();
+hvar<Queue> node_3_queue = new Queue();
 hvar node_0_RN = [-1(NODE_NUMBER)];
 hvar node_1_RN = [-1(NODE_NUMBER)];
 hvar node_2_RN = [-1(NODE_NUMBER)];
+hvar node_3_RN = [-1(NODE_NUMBER)];
 hvar node_0_LN = [-1(NODE_NUMBER)];
 hvar node_1_LN = [-1(NODE_NUMBER)];
 hvar node_2_LN = [-1(NODE_NUMBER)];
+hvar node_3_LN = [-1(NODE_NUMBER)];
 
 var critical_section_counter = 0;
 
@@ -54,6 +59,11 @@ Node_0_Acquire_MUTEX(i) =
 					};
 					if (nodes_state[2] != FAILED) {
 						request_network_2!i.node_0_RN[i] -> Skip
+					} else {
+						Skip
+					};
+					if (nodes_state[3] != FAILED) {
+						request_network_3!i.node_0_RN[i] -> Skip
 					} else {
 						Skip
 					}
@@ -99,6 +109,11 @@ Node_0_Release_MUTEX(i) =
 				append_node_2_to_node_0_queue{node_0_queue.Enqueue(2);} -> Skip
 			} else {
 				Skip
+			};
+			if (node_0_RN[3] == node_0_LN[3] + 1 && !node_0_queue.Contains(3)) {
+				append_node_3_to_node_0_queue{node_0_queue.Enqueue(3);} -> Skip
+			} else {
+				Skip
 			}
 		);
 		(
@@ -110,6 +125,7 @@ Node_0_Release_MUTEX(i) =
 				case {
 					nodes_send_privilege_to[i] == 1: response_network_1!node_0_queue.node_0_LN -> Skip
 					nodes_send_privilege_to[i] == 2: response_network_2!node_0_queue.node_0_LN -> Skip
+					nodes_send_privilege_to[i] == 3: response_network_3!node_0_queue.node_0_LN -> Skip
 					default: Skip
 				}
 			} else {
@@ -139,6 +155,11 @@ Node_1_Acquire_MUTEX(i) =
 					};
 					if (nodes_state[2] != FAILED) {
 						request_network_2!i.node_1_RN[i] -> Skip
+					} else {
+						Skip
+					};
+					if (nodes_state[3] != FAILED) {
+						request_network_3!i.node_1_RN[i] -> Skip
 					} else {
 						Skip
 					}
@@ -183,6 +204,11 @@ Node_1_Release_MUTEX(i) =
 				append_node_2_to_node_1_queue{node_1_queue.Enqueue(2);} -> Skip
 			} else {
 				Skip
+			};
+			if (node_1_RN[3] == node_1_LN[3] + 1 && !node_1_queue.Contains(3)) {
+				append_node_3_to_node_1_queue{node_1_queue.Enqueue(3);} -> Skip
+			} else {
+				Skip
 			}
 		);
 		(
@@ -194,6 +220,7 @@ Node_1_Release_MUTEX(i) =
 				case {
 					nodes_send_privilege_to[i] == 0: response_network_0!node_1_queue.node_1_LN -> Skip
 					nodes_send_privilege_to[i] == 2: response_network_2!node_1_queue.node_1_LN -> Skip
+					nodes_send_privilege_to[i] == 3: response_network_3!node_1_queue.node_1_LN -> Skip
 					default: Skip
 				}
 			} else {
@@ -223,6 +250,11 @@ Node_2_Acquire_MUTEX(i) =
 					};
 					if (nodes_state[1] != FAILED) {
 						request_network_1!i.node_2_RN[i] -> Skip
+					} else {
+						Skip
+					};
+					if (nodes_state[3] != FAILED) {
+						request_network_3!i.node_2_RN[i] -> Skip
 					} else {
 						Skip
 					}
@@ -267,6 +299,11 @@ Node_2_Release_MUTEX(i) =
 				append_node_1_to_node_2_queue{node_2_queue.Enqueue(1);} -> Skip
 			} else {
 				Skip
+			};
+			if (node_2_RN[3] == node_2_LN[3] + 1 && !node_2_queue.Contains(3)) {
+				append_node_3_to_node_2_queue{node_2_queue.Enqueue(3);} -> Skip
+			} else {
+				Skip
 			}
 		);
 		(
@@ -278,6 +315,7 @@ Node_2_Release_MUTEX(i) =
 				case {
 					nodes_send_privilege_to[i] == 0: response_network_0!node_2_queue.node_2_LN -> Skip
 					nodes_send_privilege_to[i] == 1: response_network_1!node_2_queue.node_2_LN -> Skip
+					nodes_send_privilege_to[i] == 3: response_network_3!node_2_queue.node_2_LN -> Skip
 					default: Skip
 				}
 			} else {
@@ -289,6 +327,102 @@ Node_2_Release_MUTEX(i) =
 			Node_2_Acquire_MUTEX(i)
 		)
 	);
+
+Node_3_Acquire_MUTEX(i) = 
+	if (nodes_critical_section_access_count[i] > 0) {
+		request_to_acquire_MUTEX_for_node_3_critical_section{
+			nodes_requesting[i] = IS_REQUESTING;
+			nodes_critical_section_access_count[i] = nodes_critical_section_access_count[i] - 1;
+		} ->
+		if (nodes_have_privilege[i] == NOT_HAVE_PRIVILEGE) {
+			increment_node_3_RN.i{node_3_RN[i] = node_3_RN[i] + 1;} -> 
+			(
+				(
+					if (nodes_state[0] != FAILED) {
+						request_network_0!i.node_3_RN[i] -> Skip
+					} else {
+						Skip
+					};
+					if (nodes_state[1] != FAILED) {
+						request_network_1!i.node_3_RN[i] -> Skip
+					} else {
+						Skip
+					};
+					if (nodes_state[2] != FAILED) {
+						request_network_2!i.node_3_RN[i] -> Skip
+					} else {
+						Skip
+					}
+				);
+				(
+					response_network_3?queue.LN -> 
+					atomic{
+						update_node_3_queue_and_LN{
+							node_3_queue = queue;
+							node_3_LN = LN;
+						} -> 
+						set_node_3_have_privilege{nodes_have_privilege[i] = HAVE_PRIVILEGE;} -> 
+						Skip
+					}
+				);
+				Node_3_Process_Critical_Section(i)
+			)
+		} else {
+			Node_3_Process_Critical_Section(i)
+		}
+	} else {
+		update_node_3_status_to_completed{nodes_state[i] = COMPLETED} -> 
+		Skip
+	};
+
+Node_3_Process_Critical_Section(i) = 
+	enter_node_3_critical_section{critical_section_counter = critical_section_counter + 1;} -> 
+	process_node_3_critical_section -> 
+	exit_node_3_critical_section{critical_section_counter = critical_section_counter - 1;} -> 
+	Node_3_Release_MUTEX(i);
+
+Node_3_Release_MUTEX(i) = 
+	update_node_3_LN.i{node_3_LN[i] = node_3_RN[i];} -> 
+	(
+		(
+			if (node_3_RN[0] == node_3_LN[0] + 1 && !node_3_queue.Contains(0)) {
+				append_node_0_to_node_3_queue{node_3_queue.Enqueue(0);} -> Skip
+			} else {
+				Skip
+			};
+			if (node_3_RN[1] == node_3_LN[1] + 1 && !node_3_queue.Contains(1)) {
+				append_node_1_to_node_3_queue{node_3_queue.Enqueue(1);} -> Skip
+			} else {
+				Skip
+			};
+			if (node_3_RN[2] == node_3_LN[2] + 1 && !node_3_queue.Contains(2)) {
+				append_node_2_to_node_3_queue{node_3_queue.Enqueue(2);} -> Skip
+			} else {
+				Skip
+			}
+		);
+		(
+			ifa (node_3_queue.Count() > 0) {
+				set_node_3_not_have_privilege{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+				update_node_3_send_privilege_to{
+					nodes_send_privilege_to[i] = node_3_queue.Dequeue();
+				} -> 
+				case {
+					nodes_send_privilege_to[i] == 0: response_network_0!node_3_queue.node_3_LN -> Skip
+					nodes_send_privilege_to[i] == 1: response_network_1!node_3_queue.node_3_LN -> Skip
+					nodes_send_privilege_to[i] == 2: response_network_2!node_3_queue.node_3_LN -> Skip
+					default: Skip
+				}
+			} else {
+				Skip
+			}
+		);
+		(
+			request_to_release_MUTEX_for_node_3_critical_section{nodes_requesting[i] = IS_NOT_REQUESTING;} -> 
+			Node_3_Acquire_MUTEX(i)
+		)
+	);
+
 
 Node_0_Request_Handler(i) = 
 	[call(ccount, request_network_0) > 0](
@@ -304,6 +438,7 @@ Node_0_Request_Handler(i) =
 				case {
 					j == 1: response_network_1!node_0_queue.node_0_LN -> Skip
 					j == 2: response_network_2!node_0_queue.node_0_LN -> Skip
+					j == 3: response_network_3!node_0_queue.node_0_LN -> Skip
 					default: Skip
 				}
 			} else {
@@ -323,6 +458,12 @@ Node_0_Request_Handler(i) =
 		send_node_0_privilege_to_node.2{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
 		response_network_2!node_0_queue.node_0_LN -> 
 		Node_0_Request_Handler(i)
+	)
+	[]
+	[nodes_state[i] == COMPLETED && nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_0_RN[3] == node_0_LN[3] + 1](
+		send_node_0_privilege_to_node.3{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+		response_network_3!node_0_queue.node_0_LN -> 
+		Node_0_Request_Handler(i)
 	);
 
 Node_1_Request_Handler(i) = 
@@ -339,6 +480,7 @@ Node_1_Request_Handler(i) =
 				case {
 					j == 0: response_network_0!node_1_queue.node_1_LN -> Skip
 					j == 2: response_network_2!node_1_queue.node_1_LN -> Skip
+					j == 3: response_network_3!node_1_queue.node_1_LN -> Skip
 					default: Skip
 				}
 			} else {
@@ -358,6 +500,12 @@ Node_1_Request_Handler(i) =
 		send_node_1_privilege_to_node.2{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
 		response_network_2!node_1_queue.node_1_LN -> 
 		Node_1_Request_Handler(i)
+	)
+	[]
+	[nodes_state[i] == COMPLETED && nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_1_RN[3] == node_1_LN[3] + 1](
+		send_node_1_privilege_to_node.3{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+		response_network_3!node_1_queue.node_1_LN -> 
+		Node_1_Request_Handler(i)
 	);
 
 Node_2_Request_Handler(i) = 
@@ -374,6 +522,7 @@ Node_2_Request_Handler(i) =
 				case {
 					j == 0: response_network_0!node_2_queue.node_2_LN -> Skip
 					j == 1: response_network_1!node_2_queue.node_2_LN -> Skip
+					j == 3: response_network_3!node_2_queue.node_2_LN -> Skip
 					default: Skip
 				}
 			} else {
@@ -393,6 +542,54 @@ Node_2_Request_Handler(i) =
 		send_node_2_privilege_to_node.1{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
 		response_network_1!node_2_queue.node_2_LN -> 
 		Node_2_Request_Handler(i)
+	)
+	[]
+	[nodes_state[i] == COMPLETED && nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_2_RN[3] == node_2_LN[3] + 1](
+		send_node_2_privilege_to_node.3{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+		response_network_3!node_2_queue.node_2_LN -> 
+		Node_2_Request_Handler(i)
+	);
+
+Node_3_Request_Handler(i) = 
+	[call(ccount, request_network_3) > 0](
+		request_network_3?j.n -> 
+		atomic{
+			update_node_3_RN.j{
+				if(node_3_RN[j] < n) {
+					node_3_RN[j] = n;
+				}
+			} -> 
+			ifa (nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_3_RN[j] == node_3_LN[j] + 1) {
+				send_node_3_privilege_to_node.j{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+				case {
+					j == 0: response_network_0!node_3_queue.node_3_LN -> Skip
+					j == 1: response_network_1!node_3_queue.node_3_LN -> Skip
+					j == 2: response_network_2!node_3_queue.node_3_LN -> Skip
+					default: Skip
+				}
+			} else {
+				Skip
+			}
+		};
+		Node_3_Request_Handler(i)
+	)
+	[]
+	[nodes_state[i] == COMPLETED && nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_3_RN[0] == node_3_LN[0] + 1](
+		send_node_3_privilege_to_node.0{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+		response_network_0!node_3_queue.node_3_LN -> 
+		Node_3_Request_Handler(i)
+	)
+	[]
+	[nodes_state[i] == COMPLETED && nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_3_RN[1] == node_3_LN[1] + 1](
+		send_node_3_privilege_to_node.1{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+		response_network_1!node_3_queue.node_3_LN -> 
+		Node_3_Request_Handler(i)
+	)
+	[]
+	[nodes_state[i] == COMPLETED && nodes_have_privilege[i] == HAVE_PRIVILEGE && nodes_requesting[i] == IS_NOT_REQUESTING && node_3_RN[2] == node_3_LN[2] + 1](
+		send_node_3_privilege_to_node.2{nodes_have_privilege[i] = NOT_HAVE_PRIVILEGE;} -> 
+		response_network_2!node_3_queue.node_3_LN -> 
+		Node_3_Request_Handler(i)
 	);
 
 
@@ -402,7 +599,9 @@ Node_1(i) = Node_1_Acquire_MUTEX(i) ||| Node_1_Request_Handler(i);
 
 Node_2(i) = Node_2_Acquire_MUTEX(i) ||| Node_2_Request_Handler(i);
 
-Distributed_System() = Node_0(0) ||| Node_1(1) ||| Node_2(2);
+Node_3(i) = Node_3_Acquire_MUTEX(i) ||| Node_3_Request_Handler(i);
+
+Distributed_System() = Node_0(0) ||| Node_1(1) ||| Node_2(2) ||| Node_3(3);
 
 
 Node_0_Error(i, failure_rate) = pcase {
@@ -420,27 +619,37 @@ Node_2_Error(i, failure_rate) = pcase {
 	(100 - failure_rate): Skip
 };
 
+Node_3_Error(i, failure_rate) = pcase {
+	failure_rate: exception.i -> Skip
+	(100 - failure_rate): Skip
+};
+
 Node_0_With_Failure(i, failure_rate) = 
-	Node_0_Error(i, failure_rate) || (Node_0(i) interrupt (exception.i -> update_node_0_status_to_failed{nodes_state[0] = FAILED;} -> Skip));
+	Node_0_Error(i, failure_rate) || (Node_0(0) interrupt (exception.i -> update_node_0_status_to_failed{nodes_state[0] = FAILED;} -> Skip));
 
 Node_1_With_Failure(i, failure_rate) = 
-	Node_1_Error(i, failure_rate) || (Node_1(i) interrupt (exception.i -> update_node_1_status_to_failed{nodes_state[1] = FAILED;} -> Skip));
+	Node_1_Error(i, failure_rate) || (Node_1(1) interrupt (exception.i -> update_node_1_status_to_failed{nodes_state[1] = FAILED;} -> Skip));
 
 Node_2_With_Failure(i, failure_rate) = 
-	Node_2_Error(i, failure_rate) || (Node_2(i) interrupt (exception.i -> update_node_2_status_to_failed{nodes_state[2] = FAILED;} -> Skip));
+	Node_2_Error(i, failure_rate) || (Node_2(2) interrupt (exception.i -> update_node_2_status_to_failed{nodes_state[2] = FAILED;} -> Skip));
+
+Node_3_With_Failure(i, failure_rate) = 
+	Node_3_Error(i, failure_rate) || (Node_3(3) interrupt (exception.i -> update_node_3_status_to_failed{nodes_state[3] = FAILED;} -> Skip));
 
 Distributed_System_With_Failure() = 
-	Node_0_With_Failure(0, 17) ||| 
-	Node_1_With_Failure(1, 23) ||| 
-	Node_2_With_Failure(2, 28);
+	Node_0_With_Failure(0, 20) ||| 
+	Node_1_With_Failure(1, 30) ||| 
+	Node_2_With_Failure(2, 15) ||| 
+	Node_3_With_Failure(3, 40);
 
 
 #define unsafe_state (critical_section_counter > 1);
-#define deadlock_free (nodes_state[0] == COMPLETED && nodes_state[1] == COMPLETED && nodes_state[2] == COMPLETED);
+#define deadlock_free (nodes_state[0] == COMPLETED && nodes_state[1] == COMPLETED && nodes_state[2] == COMPLETED && nodes_state[3] == COMPLETED);
 #define deadlock_state (
 	(nodes_state[0] == FAILED && nodes_have_privilege[0] == HAVE_PRIVILEGE) || 
 	(nodes_state[1] == FAILED && nodes_have_privilege[1] == HAVE_PRIVILEGE) || 
-	(nodes_state[2] == FAILED && nodes_have_privilege[2] == HAVE_PRIVILEGE)
+	(nodes_state[2] == FAILED && nodes_have_privilege[2] == HAVE_PRIVILEGE) || 
+	(nodes_state[3] == FAILED && nodes_have_privilege[3] == HAVE_PRIVILEGE)
 );
 
 #assert Distributed_System() reaches unsafe_state;
@@ -451,3 +660,4 @@ Distributed_System_With_Failure() =
 #assert Distributed_System_With_Failure() deadlockfree with prob;
 #assert Distributed_System_With_Failure() |= [] <> deadlock_free with prob;
 #assert Distributed_System_With_Failure() reaches deadlock_state with prob;
+
